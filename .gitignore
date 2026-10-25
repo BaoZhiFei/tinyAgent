@@ -1,0 +1,8 @@
+.env
+.superpowers/
+.worktrees/
+.reference-src/
+infra/Pulumi.*.yaml
+node_modules/
+dist/
+bin/

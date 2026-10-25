@@ -1,0 +1,72 @@
+name: 构建并推送 tinyAgent 镜像
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "Dockerfile.agent"
+      - "agent-image/**"
+      - "cmd/**"
+      - "internal/**"
+      - "go.mod"
+      - "go.sum"
+      - "web/**"
+      - ".github/workflows/publish-images.yml"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: 安装阿里云 CLI
+        uses: aliyun/setup-aliyun-cli-action@v1
+      - name: 临时放行本次运行器并登录镜像仓库
+        id: registry
+        env:
+          ALIBABA_CLOUD_ACCESS_KEY_ID: ${{ secrets.ALIBABA_CLOUD_ACCESS_KEY_ID }}
+          ALIBABA_CLOUD_ACCESS_KEY_SECRET: ${{ secrets.ALIBABA_CLOUD_ACCESS_KEY_SECRET }}
+          ACR_REGISTRY: ${{ secrets.ACR_REGISTRY }}
+        run: |
+          aliyun configure set --profile default --mode AK \
+            --access-key-id "$ALIBABA_CLOUD_ACCESS_KEY_ID" \
+            --access-key-secret "$ALIBABA_CLOUD_ACCESS_KEY_SECRET" \
+            --region cn-shanghai --language en
+          runner_ip="$(curl --fail --silent --show-error https://api.ipify.org)"
+          aliyun cr CreateInstanceEndpointAclPolicy \
+            --InstanceId cri-9pihnmrsbuwalcex --EndpointType Internet --ModuleName Registry \
+            --Entry "${runner_ip}/32" --Comment github-actions-tinyagent-build
+          token_json="$(aliyun cr GetAuthorizationToken --InstanceId cri-9pihnmrsbuwalcex --ExpiresInHours 1)"
+          username="$(printf '%s' "$token_json" | jq -r '.TempUsername')"
+          password="$(printf '%s' "$token_json" | jq -r '.AuthorizationToken')"
+          printf '%s' "$password" | docker login "$ACR_REGISTRY" --username "$username" --password-stdin
+      - name: 构建并推送 API 镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.ACR_REGISTRY }}/baozhifei/tinyagent-api:demo
+            ${{ secrets.ACR_REGISTRY }}/baozhifei/tinyagent-api:${{ github.sha }}
+      - name: 构建并推送 Web 镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          file: ./web/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.ACR_REGISTRY }}/baozhifei/tinyagent-web:demo
+            ${{ secrets.ACR_REGISTRY }}/baozhifei/tinyagent-web:${{ github.sha }}
+      - name: 构建并推送 Agent 镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.agent
+          push: true
+          tags: |
+            ${{ secrets.ACR_REGISTRY }}/baozhifei/tinyagent-agent:demo
+            ${{ secrets.ACR_REGISTRY }}/baozhifei/tinyagent-agent:${{ github.sha }}

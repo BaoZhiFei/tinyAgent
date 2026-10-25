@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tinyagent
+      POSTGRES_USER: tinyagent
+      POSTGRES_PASSWORD: local-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tinyagent -d tinyagent"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    environment:
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:?DASHSCOPE_API_KEY is required}
+      CODEX_API_KEY: ${DASHSCOPE_API_KEY:?DASHSCOPE_API_KEY is required}
+      MODEL_API_KEY: ${DASHSCOPE_API_KEY:?DASHSCOPE_API_KEY is required}
+      AGENT_CMD: codex-acp
+      MODEL_PROVIDER: bailian
+      NO_BROWSER: "1"
+      # Docker 已是本地运行时的隔离边界；避免 Codex 在容器里再启动 bwrap，后者需要
+      # Docker 默认不会提供的非特权 user namespace。ACP 事件仍原样转给浏览器。
+      INITIAL_AGENT_MODE: agent-full-access
+      DEFAULT_AUTH_REQUEST: '{"methodId":"api-key"}'
+      CODEX_CONFIG: '{"model_provider":"bailian","model":"qwen3.8-max","model_providers":{"bailian":{"name":"阿里云百炼","base_url":"https://llm-4im00vvmdedf6zgl.cn-beijing.maas.aliyuncs.com/compatible-mode/v1","wire_api":"responses","env_key":"MODEL_API_KEY"}}}'
+    volumes:
+      - agent-home:/home/agent/.codex
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://tinyagent:local-only@postgres:5432/tinyagent?sslmode=disable
+      LISTEN_ADDRESS: :8080
+      SANDBOX_NAMESPACE: tinyagent
+      SANDBOX_POOL_NAME: tinyagent-pool
+      AGENTICFS_PV_NAME: tinyagent-agenticfs
+      SANDBOX_CLAIM_TIMEOUT: 5m
+      IDLE_TIMEOUT: 10m
+      MAX_LIFETIME: 30m
+      LOCAL_ACP_ENDPOINT: ws://agent:8080/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      agent:
+        condition: service_started
+
+  web:
+    build: ./web
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./web/nginx.local.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  agent-home:
+  postgres-data:

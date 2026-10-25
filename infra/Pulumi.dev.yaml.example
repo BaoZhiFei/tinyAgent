@@ -1,0 +1,52 @@
+config:
+  # Provider 配置：由 Pulumi 的阿里云插件读取。
+  alicloud:profile: tinyagent
+  # 必填：部署区域。当前示例只为上海环境准备。
+  alicloud:region: cn-shanghai
+
+  # 项目身份与公网入口。
+  tinyagent:name: tinyagent
+  tinyagent:domain: tinyagent.example.com
+  # tinyagent:certificateID: <数字证书ID>-cn-hangzhou
+
+  # 集群与镜像。
+  # 必填：AgenticFS 当前仅支持华东2（上海）的上海可用区 F；ACK 节点必须同区。
+  tinyagent:zoneId: cn-shanghai-f
+  tinyagent:clusterSpec: ack.pro.small
+  # 必填：三个已推送的兼容镜像。Pulumi 会自动固定到当前 Git commit tag。
+  tinyagent:agentImage: registry.cn-shanghai.aliyuncs.com/example/tinyagent-agent:demo
+  tinyagent:apiImage: registry.cn-shanghai.aliyuncs.com/example/tinyagent-api:demo
+  tinyagent:webImage: registry.cn-shanghai.aliyuncs.com/example/tinyagent-web:demo
+
+  # API 运行参数：这些值由 API 容器原样读取，不在 Go 代码中设置默认值。
+  tinyagent:listenAddress: :8080
+  tinyagent:sandboxNamespace: tinyagent
+  tinyagent:sandboxPoolName: tinyagent-pool
+  tinyagent:persistentVolumeName: tinyagent-agenticfs
+  tinyagent:sandboxClaimTimeout: 5m
+  tinyagent:idleTimeout: 10m
+  tinyagent:maxLifetime: 30m
+
+  # AgenticFS 存储。
+  # 必填：由 ACK AgenticFS 控制台创建并读回；Pulumi 用它创建静态 PV。
+  tinyagent:agenticFSAccessPointDomain: ap-example.cn-shanghai.nas.aliyuncs.com
+  tinyagent:agenticFSAccessPointID: ap-example
+  tinyagent:agenticFileSystemID: fs-example
+
+  # 模型服务。
+  # 必填且敏感：默认使用百炼 Qwen3.8-Max；如需其他模型，再覆盖下列模型设置。
+  # 请用 `pulumi config set --secret tinyagent:modelApiKey ...` 设置真实值，绝不提交密钥。
+  tinyagent:modelApiKey:
+    secure: replace-with-pulumi-secret
+  tinyagent:modelProvider: bailian
+  tinyagent:modelProviderName: 阿里云百炼
+  tinyagent:modelBaseURL: https://llm-4im00vvmdedf6zgl.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+  tinyagent:model: qwen3.8-max
+
+  # Sandbox Manager 入口。
+  tinyagent:sandboxManagerDomain: sandbox.example.com
+
+  # 节点与容量。
+  tinyagent:warmPoolSize: "10"
+  tinyagent:managerNodeCount: "1"
+  tinyagent:managerNodeInstanceType: ecs.c8i.4xlarge

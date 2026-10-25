@@ -1,0 +1,1 @@
+{"name":"tinyagent-infra","private":true,"scripts":{"build":"tsc --noEmit","preview":"pulumi preview"},"dependencies":{"@pulumi/alicloud":"latest","@pulumi/kubernetes":"latest","@pulumi/pulumi":"latest","@pulumi/random":"^4.21.2"},"devDependencies":{"@types/node":"latest","typescript":"latest"}}

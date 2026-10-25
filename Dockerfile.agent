@@ -1,0 +1,20 @@
+# 沙箱镜像只包含桥、Codex ACP 和最小工具；密钥由 ACK 在运行时注入，绝不写进镜像。
+FROM golang:1.24-bookworm AS bridge-builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd/sandbox-bridge ./cmd/sandbox-bridge
+RUN CGO_ENABLED=0 go build -o /out/sandbox-bridge ./cmd/sandbox-bridge
+
+FROM node:22-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git ripgrep python3 procps && rm -rf /var/lib/apt/lists/*
+# 固定 ACP 适配器版本，避免镜像重建时协议行为悄悄改变；2.2.2 包含较新的
+# Codex App Server 初始化链路，后续基准测试仍以线上分段耗时为准。
+RUN npm install -g --omit=dev @agentclientprotocol/codex-acp@2.2.2 && npm cache clean --force
+COPY --from=bridge-builder /out/sandbox-bridge /usr/local/bin/sandbox-bridge
+COPY agent-image/sandbox-entrypoint.sh /usr/local/bin/sandbox-entrypoint
+COPY agent-image/bailian-model-catalog.json /usr/local/share/tinyagent/bailian-model-catalog.json
+RUN chmod +x /usr/local/bin/sandbox-entrypoint && mkdir -p /home/agent/workspace /home/agent/.codex/sessions
+ENV AGENT_CMD=codex-acp
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/sandbox-entrypoint"]
